@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>30/4 Fireworks Celebration with Sound</title>
+<style>
+  /* Reset and base */
+  * {
+    box-sizing: border-box;
+  }
+  body, html {
+    margin: 0; padding: 0;
+    background: radial-gradient(ellipse at center, #020111 0%, #3a3a52 100%);
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #fff;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+  }
+  #container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+  header {
+    position: absolute;
+    top: 20px;
+    width: 100%;
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: bold;
+    letter-spacing: 0.1em;
+    text-shadow: 0 0 10px rgba(255 255 255 / 0.9);
+    z-index: 10;
+    pointer-events: none;
+  }
+  canvas {
+    display: block;
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+  #startOverlay {
+    position: absolute;
+    top:0; left:0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.85);
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 2rem;
+    text-align: center;
+    cursor: pointer;
+    z-index: 100;
+    user-select: none;
+  }
+  #startOverlay:active {
+    opacity: 0.8;
+  }
+  @media (max-width: 400px) {
+    header {
+      font-size: 1.8rem;
+    }
+    #startOverlay {
+      font-size: 1.6rem;
+      padding: 0 20px;
+    }
+  }
+</style>
+</head>
+<body>
+  <div id="container">
+    <header>Chúc Mừng Ngày 30/4</header>
+    <canvas id="fireworks"></canvas>
+    <div id="startOverlay">Click to start the fireworks celebration with sound 🎆</div>
+    <!-- Explosion sound -->
+    <audio id="explosion-sound" src="fire.mp3" preload="auto"></audio>
+  </div>
+<script>
+(() => {
+  const startOverlay = document.getElementById('startOverlay');
+  const canvas = document.getElementById('fireworks');
+  const ctx = canvas.getContext('2d');
+  const explosionSound = document.getElementById('explosion-sound');
+
+  let cw, ch;
+  let fireworks = [];
+  let particles = [];
+  const maxFireworks = 5;
+  const maxParticles = 400;
+  let animationRunning = false;
+
+  // Utility functions
+  function random(min, max){
+    return Math.random() * (max - min) + min;
+  }
+  function calculateDistance(x1, y1, x2, y2) {
+    let xDistance = x1 - x2;
+    let yDistance = y1 - y2;
+    return Math.sqrt(xDistance * xDistance + yDistance * yDistance);
+  }
+
+  // Firework class
+  class Firework {
+    constructor(sx, sy, tx, ty) {
+      this.x = sx;
+      this.y = sy;
+      this.sx = sx;
+      this.sy = sy;
+      this.tx = tx;
+      this.ty = ty;
+      this.distanceToTarget = calculateDistance(sx, sy, tx, ty);
+      this.distanceTraveled = 0;
+      this.coordinates = [];
+      this.coordinateCount = 3;
+      while(this.coordinateCount--) {
+        this.coordinates.push([this.x, this.y]);
+      }
+      this.angle = Math.atan2(ty - sy, tx - sx);
+      this.speed = 3;
+      this.acceleration = 1.05;
+      this.brightness = random(50, 70);
+      this.targetRadius = 8;
+    }
+    update(index) {
+      this.coordinates.pop();
+      this.coordinates.unshift([this.x, this.y]);
+
+      this.speed *= this.acceleration;
+
+      let vx = Math.cos(this.angle) * this.speed;
+      let vy = Math.sin(this.angle) * this.speed;
+      this.distanceTraveled = calculateDistance(this.sx, this.sy, this.x + vx, this.y + vy);
+
+      if(this.distanceTraveled >= this.distanceToTarget){
+        createParticles(this.tx, this.ty);
+        // Play explosion sound (clone to allow overlapping sounds)
+        if (animationRunning) {
+          try {
+            const soundClone = explosionSound.cloneNode();
+            soundClone.volume = 0.5;
+            // Play with promise handling (some browsers require this)
+            const playPromise = soundClone.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(() => { /* Audio play was prevented */ });
+            }
+          } catch(e) {
+            // Ignore errors
+          }
+        }
+        // remove firework
+        fireworks.splice(index, 1);
+      } else {
+        this.x += vx;
+        this.y += vy;
+      }
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.moveTo(this.coordinates[this.coordinates.length-1][0], this.coordinates[this.coordinates.length-1][1]);
+      ctx.lineTo(this.x, this.y);
+      ctx.strokeStyle = `hsl(${random(0, 360)}, 100%, ${this.brightness}%)`;
+      ctx.stroke();
+
+      // draw target circle
+      ctx.beginPath();
+      ctx.arc(this.tx, this.ty, this.targetRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.stroke();
+    }
+  }
+
+  // Particle class
+  class Particle {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+      this.coordinates = [];
+      this.coordinateCount = 5;
+      while(this.coordinateCount--) {
+        this.coordinates.push([this.x, this.y]);
+      }
+      this.angle = random(0, Math.PI*2);
+      this.speed = random(1, 10);
+      this.friction = 0.95;
+      this.gravity = 0.7;
+      this.hue = random(0, 360);
+      this.brightness = random(50, 80);
+      this.alpha = 1;
+      this.decay = random(0.015, 0.03);
+      this.radius = random(1, 3);
+    }
+    update(index) {
+      this.coordinates.pop();
+      this.coordinates.unshift([this.x, this.y]);
+      this.speed *= this.friction;
+      this.x += Math.cos(this.angle) * this.speed;
+      this.y += Math.sin(this.angle) * this.speed + this.gravity;
+      this.alpha -= this.decay;
+
+      if(this.alpha <= 0){
+        particles.splice(index, 1);
+      }
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.moveTo(this.coordinates[this.coordinates.length-1][0], this.coordinates[this.coordinates.length-1][1]);
+      ctx.lineTo(this.x, this.y);
+      ctx.strokeStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
+      ctx.stroke();
+    }
+  }
+
+  // Create particle explosion at coords
+  function createParticles(x, y) {
+    let particleCount = 50;
+    while(particleCount--) {
+      if (particles.length < maxParticles) {
+        particles.push(new Particle(x, y));
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Launch fireworks from bottom center towards random targets
+  function launchFirework() {
+    if(fireworks.length < maxFireworks){
+      const sx = cw / 2;
+      const sy = ch;
+      const tx = random(50, cw - 50);
+      const ty = random(50, ch / 2);
+      fireworks.push(new Firework(sx, sy, tx, ty));
+    }
+  }
+
+  // Resize handler
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    cw = rect.width;
+    ch = rect.height;
+    canvas.width = cw * devicePixelRatio;
+    canvas.height = ch * devicePixelRatio;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+  }
+
+  window.addEventListener('resize', resize);
+
+  function animate() {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(0, 0, cw, ch);
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    fireworks.forEach((firework, i) => {
+      firework.draw();
+      firework.update(i);
+    });
+
+    particles.forEach((particle, i) => {
+      particle.draw();
+      particle.update(i);
+    });
+
+    if (Math.random() < 0.05) {
+      launchFirework();
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  // Start the animation and sound after user interaction
+  function startAnimation() {
+    if(animationRunning) return;
+    animationRunning = true;
+    startOverlay.style.display = 'none';
+    // Some browsers require user to explicitly play audio to unlock sound
+    // Play a tiny silent audio to unlock audio context (optional)
+    explosionSound.play().then(() => {
+      explosionSound.pause();
+      explosionSound.currentTime = 0;
+    }).catch(() => {
+      // Ignore play errors here
+    });
+    resize();
+    animate();
+  }
+
+  startOverlay.addEventListener('click', startAnimation);
+})();
+</script>
+</body>
+</html>
+
